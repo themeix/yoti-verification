@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Funded Membership (16&ndash;25) &mdash; Age Verification</title>
+  <style>
+    :root { color-scheme: light; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background: #f5f7f9;
+      color: #24292f;
+      line-height: 1.6;
+    }
+    .wrap { max-width: 620px; margin: 0 auto; padding: 32px 20px 64px; }
+    .card {
+      background: #fff;
+      border: 1px solid #e3e6e9;
+      border-radius: 12px;
+      padding: 28px;
+      box-shadow: 0 1px 3px rgba(16, 24, 40, 0.06);
+    }
+    h1 { font-size: 1.6rem; margin: 0 0 8px; }
+    h2 { font-size: 1.05rem; margin: 24px 0 8px; }
+    p { margin: 8px 0; }
+    ul { margin: 8px 0; padding-left: 22px; }
+    label { display: block; font-weight: 600; font-size: 0.9rem; margin: 16px 0 4px; }
+    input[type="text"], input[type="email"] {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid #cfd6dc;
+      border-radius: 8px;
+      font-size: 1rem;
+      background: #fff;
+    }
+    input:focus { outline: 2px solid #248fb2; outline-offset: 1px; border-color: #248fb2; }
+    .consent { display: flex; gap: 10px; align-items: flex-start; margin: 18px 0; font-weight: 400; }
+    .consent input { margin-top: 4px; }
+    button {
+      width: 100%;
+      padding: 13px 16px;
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: #fff;
+      background: #248fb2;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+    button:disabled { opacity: 0.6; cursor: wait; }
+    .msg { display: none; margin-top: 14px; padding: 12px 14px; border-radius: 8px; font-size: 0.95rem; }
+    .msg.error { display: block; background: #fdecec; color: #9d2235; border: 1px solid #f5c6cb; }
+    .fine { font-size: 0.85rem; color: #57606a; margin-top: 20px; }
+    .credit { text-align: center; font-size: 0.85rem; color: #57606a; margin-top: 22px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1>Funded Membership (16&ndash;25)</h1>
+      <p>People's Postcode Lottery is funding a free one-year membership for people aged 16 to 25. Verify your age below to claim yours.</p>
+
+      <h2>How it works</h2>
+      <ul>
+        <li>Enter your name and email below.</li>
+        <li>You'll be redirected to Yoti, a trusted UK age-verification provider, to scan a photo ID (passport, driving licence or ID card).</li>
+        <li>If you're verified as 16&ndash;25, your free membership is set up automatically and you'll receive a welcome email with your sign-in link.</li>
+      </ul>
+
+      <h2>Privacy</h2>
+      <p>We only receive your name, your email address, and whether the age check passed. We never see or store your ID document or your date of birth. Verification is carried out by Yoti under their <a href="https://www.yoti.com/privacy-policy/" target="_blank" rel="noopener">privacy policy</a>.</p>
+
+      <form id="apply" novalidate>
+        <label for="name">Full name</label>
+        <input type="text" id="name" name="name" autocomplete="name" maxlength="100" required>
+
+        <label for="email">Email address</label>
+        <input type="email" id="email" name="email" autocomplete="email" maxlength="254" required>
+
+        <label class="consent">
+          <input type="checkbox" id="consent" required>
+          <span>I agree that my name and email may be used to set up my membership, and I consent to Yoti verifying my age. I've read the privacy information above.</span>
+        </label>
+
+        <button type="submit" id="submit">Verify my age</button>
+        <div class="msg" id="msg" role="alert"></div>
+      </form>
+
+      <p class="fine">You must be aged 16&ndash;25 on the day you apply. One funded membership per person. Your free membership lasts 12 months from the day it's granted.</p>
+    </div>
+    <p class="credit">Funded by players of People's Postcode Lottery.</p>
+  </div>
+
+  <script>
+    (function () {
+      var API_BASE = (window.FUNDED_API_BASE || "").replace(/\/+$/, "");
+      if (window.FUNDED_API_BASE === undefined && location.protocol === "file:") {
+        console.error("FUNDED_API_BASE is not set and this page was opened as a file; the form cannot reach the API.");
+      }
+      var form = document.getElementById("apply");
+      var button = document.getElementById("submit");
+      var msg = document.getElementById("msg");
+
+      function showError(text) {
+        msg.textContent = text;
+        msg.className = "msg error";
+      }
+
+      var friendly = {
+        invalid_name: "Please enter your full name.",
+        invalid_email: "Please enter a valid email address.",
+        consent_required: "Please tick the consent box to continue.",
+        too_many_attempts: "Too many attempts from this email or device today. Please try again tomorrow.",
+        already_member: "This email address already has an active paid membership.",
+        already_funded: "This email address has already claimed the funded membership.",
+        verification_unavailable: "We can't reach the membership system right now. Please try again in a few minutes.",
+        yoti_unavailable: "The age verification service is temporarily unavailable. Please try again shortly."
+      };
+
+      form.addEventListener("submit", function (event) {
+        event.preventDefault();
+        msg.className = "msg";
+        var name = document.getElementById("name").value.trim();
+        var email = document.getElementById("email").value.trim();
+        var consent = document.getElementById("consent").checked;
+        if (!name) return showError(friendly.invalid_name);
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return showError(friendly.invalid_email);
+        if (!consent) return showError(friendly.consent_required);
+
+        button.disabled = true;
+        button.textContent = "Redirecting\u2026";
+        fetch(API_BASE + "/api/start", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: name, email: email, consent: true })
+        })
+          .then(function (res) {
+            return res.text().then(function (text) {
+              var body = {};
+              try { body = JSON.parse(text); } catch (e) { body = { error: "non_json_response", detail: text.slice(0, 200) }; }
+              return { ok: res.ok, status: res.status, body: body };
+            });
+          })
+          .then(function (result) {
+            if (result.ok && result.body.yotiUrl) {
+              window.location.href = result.body.yotiUrl;
+              return;
+            }
+            button.disabled = false;
+            button.textContent = "Verify my age";
+            showError(friendly[result.body.error] || "Something went wrong (HTTP " + result.status + (result.body.error ? ": " + result.body.error : "") + "). Please try again.");
+          })
+          .catch(function (err) {
+            button.disabled = false;
+            button.textContent = "Verify my age";
+            showError("Network error: " + (err && err.message ? err.message : "request blocked") + ". Check that FUNDED_API_BASE points at the verification API and that it is reachable from this page.");
+          });
+      });
+    })();
+  </script>
+</body>
+</html>
