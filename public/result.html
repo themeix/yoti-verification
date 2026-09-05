@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Verification complete &mdash; check your email</title>
+  <title>Verification complete &mdash; funded membership</title>
   <style>
     body {
       margin: 0;
@@ -13,13 +13,30 @@
       line-height: 1.6;
     }
     .wrap { max-width: 560px; margin: 0 auto; padding: 48px 20px; text-align: center; }
-    .card {
-      background: #fff;
-      border: 1px solid #e3e6e9;
-      border-radius: 12px;
-      padding: 32px;
-    }
+    .card { background: #fff; border: 1px solid #e3e6e9; border-radius: 12px; padding: 32px; }
     h1 { font-size: 1.4rem; }
+    .status {
+      margin-top: 16px;
+      padding: 12px 14px;
+      border-radius: 8px;
+      font-size: 0.95rem;
+      background: #e8f4f9;
+      color: #14586f;
+      border: 1px solid #bcdfe9;
+    }
+    .status.success { background: #e9f7ec; color: #1e6b34; border-color: #bfe5c8; }
+    .status.error { background: #fdecec; color: #9d2235; border-color: #f5c6cb; }
+    .spinner {
+      display: inline-block;
+      width: 14px; height: 14px;
+      border: 2px solid #bcdfe9;
+      border-top-color: #248fb2;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      vertical-align: -2px;
+      margin-right: 8px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
     a.cta {
       display: inline-block;
       margin-top: 16px;
@@ -37,11 +54,49 @@
   <div class="wrap">
     <div class="card">
       <h1>Thanks &mdash; verification complete</h1>
-      <p>Your result is being processed. If you passed the age check, your free one-year membership is being set up now and a welcome email will arrive shortly with your sign-in link.</p>
-      <p>If you don't receive an email within 15 minutes, check your spam folder before getting in touch.</p>
+      <div class="status" id="status"><span class="spinner"></span>Your verification is being processed. You will receive an update when it is complete.</div>
       <a class="cta" href="/">Back to the site</a>
     </div>
     <p class="credit">Funded by players of People's Postcode Lottery.</p>
   </div>
+
+  <script>
+    (function () {
+      var API_BASE = (window.FUNDED_API_BASE || "").replace(/\/+$/, "");
+      var box = document.getElementById("status");
+      var params = new URLSearchParams(window.location.search);
+      var applicationId = params.get("application");
+      if (!applicationId) {
+        box.className = "status error";
+        box.textContent = "No application reference found in this link.";
+        return;
+      }
+      var text = {
+        VERIFICATION_IN_PROGRESS: "Your verification is being processed. You will receive an update when it is complete.",
+        VERIFICATION_APPROVED: "Verification complete. Your membership is being set up.",
+        MEMBERSHIP_CREATED: "Your funded membership has been created. Check your email for your sign-in link.",
+        NOT_ELIGIBLE: "Unfortunately, you are not eligible for this funded membership programme.",
+        VERIFICATION_FAILED: "We could not complete your verification. Please follow the instructions provided to continue, if available."
+      };
+      var attempts = 0;
+      var timer = setInterval(function () {
+        attempts += 1;
+        fetch(API_BASE + "/api/applications/" + encodeURIComponent(applicationId))
+          .then(function (res) { return res.json(); })
+          .then(function (body) {
+            if (body.terminal || attempts > 90) {
+              clearInterval(timer);
+              if (!body.terminal) return;
+            }
+            if (body.terminal) {
+              var kind = body.status === "MEMBERSHIP_CREATED" ? "success" : (body.status === "VERIFICATION_IN_PROGRESS" ? "" : "error");
+              box.className = "status " + kind;
+              box.textContent = text[body.status] || text.VERIFICATION_IN_PROGRESS;
+            }
+          })
+          .catch(function () {});
+      }, 4000);
+    })();
+  </script>
 </body>
 </html>

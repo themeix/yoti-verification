@@ -1,12 +1,12 @@
 {
-  "name": "yoti-funded-membership",
-  "version": "0.1.0",
+  "name": "veriff-funded-membership",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Age Verification & Funded Membership Programme: Yoti -> Vercel -> Ghost, with Make.com comms",
+  "description": "Age Verification & Funded Membership Programme: Veriff -> backend -> Ghost, no third-party automation",
   "scripts": {
     "dev": "node scripts/dev-server.mjs",
-    "sandbox": "node scripts/sandbox-test.mjs",
+    "webhook-test": "node scripts/veriff-webhook-test.mjs",
     "tiers": "node scripts/ghost-tiers.mjs"
   },
   "engines": {

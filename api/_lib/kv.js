@@ -85,3 +85,44 @@ export async function incrWithTtl(key, ttlSeconds) {
   memSet(key, next, Date.now() + ttlSeconds * 1000);
   return next;
 }
+
+export async function setIfNotExists(key, value, ttlSeconds) {
+  if (usingRest()) {
+    const result = await rest(["SET", key, JSON.stringify(value), "NX", "EX", String(ttlSeconds)]);
+    return result === "OK";
+  }
+  const existing = memGet(key);
+  if (existing) return false;
+  memSet(key, value, Date.now() + ttlSeconds * 1000);
+  return true;
+}
+
+export async function rpush(key, value, maxItems = 200) {
+  if (usingRest()) {
+    await rest(["RPUSH", key, JSON.stringify(value)]);
+    await rest(["LTRIM", key, String(-maxItems), "-1"]);
+    return;
+  }
+  const entry = memGet(key);
+  const list = Array.isArray(entry?.value) ? entry.value : [];
+  list.push(value);
+  memSet(key, list.slice(-maxItems), null);
+}
+
+export async function lrange(key, start = 0, stop = -1) {
+  if (usingRest()) {
+    const result = await rest(["LRANGE", key, String(start), String(stop)]);
+    if (!Array.isArray(result)) return [];
+    return result.map((item) => {
+      try {
+        return JSON.parse(item);
+      } catch {
+        return { raw: item };
+      }
+    });
+  }
+  const entry = memGet(key);
+  const list = Array.isArray(entry?.value) ? entry.value : [];
+  const sliced = stop === -1 ? list.slice(start) : list.slice(start, stop + 1);
+  return sliced;
+}

@@ -52,9 +52,24 @@
     button:disabled { opacity: 0.6; cursor: wait; }
     .msg { display: none; margin-top: 14px; padding: 12px 14px; border-radius: 8px; font-size: 0.95rem; }
     .msg.error { display: block; background: #fdecec; color: #9d2235; border: 1px solid #f5c6cb; }
+    .msg.info { display: block; background: #e8f4f9; color: #14586f; border: 1px solid #bcdfe9; }
+    .msg.success { display: block; background: #e9f7ec; color: #1e6b34; border: 1px solid #bfe5c8; }
     .fine { font-size: 0.85rem; color: #57606a; margin-top: 20px; }
     .credit { text-align: center; font-size: 0.85rem; color: #57606a; margin-top: 22px; }
+    .spinner {
+      display: inline-block;
+      width: 14px; height: 14px;
+      border: 2px solid #bcdfe9;
+      border-top-color: #248fb2;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      vertical-align: -2px;
+      margin-right: 8px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    #veriff-root { margin-top: 8px; }
   </style>
+  <script src="https://cdn.veriff.me/incontext/js/v1/veriff.js"></script>
 </head>
 <body>
   <div class="wrap">
@@ -65,28 +80,31 @@
       <h2>How it works</h2>
       <ul>
         <li>Enter your name and email below.</li>
-        <li>You'll be redirected to Yoti, a trusted UK age-verification provider, to scan a photo ID (passport, driving licence or ID card).</li>
-        <li>If you're verified as 16&ndash;25, your free membership is set up automatically and you'll receive a welcome email with your sign-in link.</li>
+        <li>A verification window from Veriff, a trusted identity-verification provider, will open so you can scan a photo ID (passport, driving licence or ID card).</li>
+        <li>If you're verified as 16&ndash;25, your free membership is set up automatically and you'll receive a sign-in email.</li>
       </ul>
 
       <h2>Privacy</h2>
-      <p>We only receive your name, your email address, and whether the age check passed. We never see or store your ID document or your date of birth. Verification is carried out by Yoti under their <a href="https://www.yoti.com/privacy-policy/" target="_blank" rel="noopener">privacy policy</a>.</p>
+      <p>We only receive your name, your email address, and whether the age check passed. We never see or store your ID document or your date of birth. Verification is carried out by Veriff under their <a href="https://www.veriff.com/privacy-policy" target="_blank" rel="noopener">privacy policy</a>.</p>
 
       <form id="apply" novalidate>
         <label for="name">Full name</label>
         <input type="text" id="name" name="name" autocomplete="name" maxlength="100" required>
 
         <label for="email">Email address</label>
-        <input type="email" id="email" name="email" autocomplete="email" maxlength="254" required>
+        <input type="email" id="email" name="email" autocomplete="email" maxlength="320" required>
 
         <label class="consent">
           <input type="checkbox" id="consent" required>
-          <span>I agree that my name and email may be used to set up my membership, and I consent to Yoti verifying my age. I've read the privacy information above.</span>
+          <span>I agree that my name and email may be used to set up my membership, and I consent to Veriff verifying my age. I've read the privacy information above.</span>
         </label>
 
         <button type="submit" id="submit">Verify my age</button>
         <div class="msg" id="msg" role="alert"></div>
       </form>
+
+      <div id="status" class="msg" role="status" style="display:none"></div>
+      <div id="veriff-root"></div>
 
       <p class="fine">You must be aged 16&ndash;25 on the day you apply. One funded membership per person. Your free membership lasts 12 months from the day it's granted.</p>
     </div>
@@ -96,16 +114,15 @@
   <script>
     (function () {
       var API_BASE = (window.FUNDED_API_BASE || "").replace(/\/+$/, "");
-      if (window.FUNDED_API_BASE === undefined && location.protocol === "file:") {
-        console.error("FUNDED_API_BASE is not set and this page was opened as a file; the form cannot reach the API.");
-      }
       var form = document.getElementById("apply");
       var button = document.getElementById("submit");
       var msg = document.getElementById("msg");
+      var statusBox = document.getElementById("status");
+      var pollTimer = null;
 
-      function showError(text) {
-        msg.textContent = text;
-        msg.className = "msg error";
+      function show(el, text, kind) {
+        el.textContent = text;
+        el.className = "msg " + (kind || "error");
       }
 
       var friendly = {
@@ -115,9 +132,51 @@
         too_many_attempts: "Too many attempts from this email or device today. Please try again tomorrow.",
         already_member: "This email address already has an active paid membership.",
         already_funded: "This email address has already claimed the funded membership.",
-        verification_unavailable: "We can't reach the membership system right now. Please try again in a few minutes.",
-        yoti_unavailable: "The age verification service is temporarily unavailable. Please try again shortly."
+        not_eligible: "A previous application with this email was not eligible for the programme.",
+        application_in_progress: "An application with this email is already in progress.",
+        membership_system_unavailable: "We can't reach the membership system right now. Please try again in a few minutes.",
+        verification_unavailable: "The age verification service is temporarily unavailable. Please try again shortly."
       };
+
+      var statusText = {
+        VERIFICATION_IN_PROGRESS: "Your verification is being processed. You will receive an update when it is complete.",
+        VERIFICATION_APPROVED: "Verification complete. Your membership is being set up.",
+        MEMBERSHIP_CREATED: "Your funded membership has been created. Check your email for your sign-in link.",
+        NOT_ELIGIBLE: "Unfortunately, you are not eligible for this funded membership programme.",
+        VERIFICATION_FAILED: "We could not complete your verification. Please follow the instructions provided to continue, if available."
+      };
+
+      function pollStatus(applicationId) {
+        var attempts = 0;
+        statusBox.style.display = "block";
+        statusBox.className = "msg info";
+        statusBox.innerHTML = '<span class="spinner"></span>' + statusText.VERIFICATION_IN_PROGRESS;
+        if (pollTimer) clearInterval(pollTimer);
+        pollTimer = setInterval(function () {
+          attempts += 1;
+          fetch(API_BASE + "/api/applications/" + encodeURIComponent(applicationId))
+            .then(function (res) { return res.json(); })
+            .then(function (body) {
+              if (body.terminal || attempts > 60) {
+                clearInterval(pollTimer);
+                pollTimer = null;
+              }
+              if (body.terminal) {
+                var kind = body.status === "MEMBERSHIP_CREATED" ? "success" : (body.status === "VERIFICATION_IN_PROGRESS" ? "info" : "error");
+                statusBox.className = "msg " + kind;
+                statusBox.textContent = statusText[body.status] || statusText.VERIFICATION_IN_PROGRESS;
+                button.disabled = false;
+                button.textContent = "Verify my age";
+              }
+            })
+            .catch(function () {
+              if (attempts > 60 && pollTimer) {
+                clearInterval(pollTimer);
+                pollTimer = null;
+              }
+            });
+        }, 4000);
+      }
 
       form.addEventListener("submit", function (event) {
         event.preventDefault();
@@ -125,13 +184,13 @@
         var name = document.getElementById("name").value.trim();
         var email = document.getElementById("email").value.trim();
         var consent = document.getElementById("consent").checked;
-        if (!name) return showError(friendly.invalid_name);
-        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return showError(friendly.invalid_email);
-        if (!consent) return showError(friendly.consent_required);
+        if (!name) return show(msg, friendly.invalid_name);
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return show(msg, friendly.invalid_email);
+        if (!consent) return show(msg, friendly.consent_required);
 
         button.disabled = true;
-        button.textContent = "Redirecting\u2026";
-        fetch(API_BASE + "/api/start", {
+        button.textContent = "Starting\u2026";
+        fetch(API_BASE + "/api/applications", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ name: name, email: email, consent: true })
@@ -139,23 +198,35 @@
           .then(function (res) {
             return res.text().then(function (text) {
               var body = {};
-              try { body = JSON.parse(text); } catch (e) { body = { error: "non_json_response", detail: text.slice(0, 200) }; }
+              try { body = JSON.parse(text); } catch (e) { body = { error: "non_json_response" }; }
               return { ok: res.ok, status: res.status, body: body };
             });
           })
           .then(function (result) {
-            if (result.ok && result.body.yotiUrl) {
-              window.location.href = result.body.yotiUrl;
+            if (result.ok && result.body.verificationUrl) {
+              button.textContent = "Verifying\u2026";
+              show(statusBox, statusText.VERIFICATION_IN_PROGRESS, "info");
+              var closePollStarted = false;
+              window.veriffSDK.createVeriffFrame({
+                url: result.body.verificationUrl,
+                onClose: function () {
+                  if (!closePollStarted) {
+                    closePollStarted = true;
+                    pollStatus(result.body.applicationId);
+                  }
+                },
+                onSession: function () {}
+              });
               return;
             }
             button.disabled = false;
             button.textContent = "Verify my age";
-            showError(friendly[result.body.error] || "Something went wrong (HTTP " + result.status + (result.body.error ? ": " + result.body.error : "") + "). Please try again.");
+            show(msg, friendly[result.body.error] || "Something went wrong (HTTP " + result.status + (result.body.error ? ": " + result.body.error : "") + "). Please try again.");
           })
           .catch(function (err) {
             button.disabled = false;
             button.textContent = "Verify my age";
-            showError("Network error: " + (err && err.message ? err.message : "request blocked") + ". Check that FUNDED_API_BASE points at the verification API and that it is reachable from this page.");
+            show(msg, "Network error: " + (err && err.message ? err.message : "request failed") + ". Check that FUNDED_API_BASE points at the verification API and that it is reachable from this page.");
           });
       });
     })();

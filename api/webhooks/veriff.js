@@ -1,4 +1,4 @@
-import { runCallback } from "./_lib/handlers.js";
+import { runVeriffWebhook } from "../../_lib/handlers.js";
 
 export default async function handler(req, res) {
   if (req.method !== "POST") {
@@ -9,15 +9,7 @@ export default async function handler(req, res) {
   const chunks = [];
   for await (const chunk of req) chunks.push(chunk);
   const raw = Buffer.concat(chunks).toString("utf8");
-  let body = {};
-  try {
-    body = raw ? JSON.parse(raw) : {};
-  } catch {
-    res.writeHead(400, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ error: "invalid_json" }));
-    return;
-  }
-  const result = await runCallback({ body });
+  const result = await runVeriffWebhook({ rawBody: raw, headers: req.headers });
   res.writeHead(result.status, result.headers);
   res.end(JSON.stringify(result.body));
 }

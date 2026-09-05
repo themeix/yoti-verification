@@ -11,7 +11,7 @@ export function corsHeaders(origin) {
   if (!origin || !isAllowedOrigin(origin)) return {};
   return {
     "Access-Control-Allow-Origin": origin,
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type",
     Vary: "Origin",
   };
@@ -60,85 +60,11 @@ export function parseDate(value) {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
-const DOB_KEYS = /^(date[_-]?of[_-]?birth|dob)$/i;
-
-export function findDateOfBirth(session) {
-  const direct =
-    deepGet(session, ["resources", "id_documents"]) ||
-    deepGet(session, ["session", "resources", "id_documents"]);
-  if (Array.isArray(direct)) {
-    for (const doc of direct) {
-      const fields = doc.fields || {};
-      const hit = firstDobValue(fields) || firstDobValue(doc.document_fields || {});
-      if (hit) return hit;
-    }
-  }
-  for (const check of session.checks || []) {
-    const report = check.report || {};
-    const hit =
-      firstDobValue(report.documentFields || {}) ||
-      firstDobValue(report.document_fields || {}) ||
-      firstDobValue(report);
-    if (hit) return hit;
-  }
-  const found = deepFindDob(session);
-  return found;
-}
-
-function firstDobValue(obj) {
-  for (const key of Object.keys(obj)) {
-    if (DOB_KEYS.test(key) && typeof obj[key] !== "object") {
-      return String(obj[key]);
-    }
-  }
-  return null;
-}
-
-function deepFindDob(node, depth = 0) {
-  if (depth > 8 || node === null || typeof node !== "object") return null;
-  if (Array.isArray(node)) {
-    for (const item of node) {
-      const hit = deepFindDob(item, depth + 1);
-      if (hit) return hit;
-    }
-    return null;
-  }
-  for (const key of Object.keys(node)) {
-    const value = node[key];
-    if (DOB_KEYS.test(key) && typeof value !== "object" && parseDate(String(value))) {
-      return String(value);
-    }
-    if (typeof value === "object") {
-      const hit = deepFindDob(value, depth + 1);
-      if (hit) return hit;
-    }
-  }
-  return null;
-}
-
-function deepGet(obj, keys) {
-  let cur = obj;
-  for (const key of keys) {
-    if (cur === null || typeof cur !== "object") return undefined;
-    cur = cur[key];
-  }
-  return cur;
-}
-
-export function extractSessionId(body) {
-  if (!body || typeof body !== "object") return null;
-  const candidates = [
-    body.session_id,
-    body.sessionId,
-    deepGet(body, ["data", "session_id"]),
-    deepGet(body, ["data", "sessionId"]),
-    deepGet(body, ["session", "id"]),
-    deepGet(body, ["session", "session_id"]),
-  ];
-  for (const candidate of candidates) {
-    if (typeof candidate === "string" && candidate.length > 0) return candidate;
-  }
-  return null;
+export function splitName(fullName) {
+  const parts = String(fullName || "").trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return { firstName: "", lastName: "" };
+  if (parts.length === 1) return { firstName: parts[0], lastName: "" };
+  return { firstName: parts[0], lastName: parts.slice(1).join(" ") };
 }
 
 export function clientIp(headers) {
@@ -150,4 +76,30 @@ export function clientIp(headers) {
 
 export function todayKey() {
   return new Date().toISOString().slice(0, 10);
+}
+
+const PUBLIC_STATUS_MAP = {
+  APPLICATION_CREATED: "VERIFICATION_IN_PROGRESS",
+  VERIFICATION_STARTED: "VERIFICATION_IN_PROGRESS",
+  VERIFICATION_IN_PROGRESS: "VERIFICATION_IN_PROGRESS",
+  VERIFICATION_APPROVED: "VERIFICATION_APPROVED",
+  VERIFICATION_DECLINED: "VERIFICATION_FAILED",
+  VERIFICATION_EXPIRED: "VERIFICATION_FAILED",
+  VERIFICATION_ABANDONED: "VERIFICATION_FAILED",
+  VERIFICATION_REVIEW: "VERIFICATION_IN_PROGRESS",
+  VERIFICATION_RESUBMISSION: "VERIFICATION_IN_PROGRESS",
+  NOT_ELIGIBLE: "NOT_ELIGIBLE",
+  ELIGIBLE: "VERIFICATION_APPROVED",
+  MEMBERSHIP_PENDING: "VERIFICATION_APPROVED",
+  MEMBERSHIP_CREATED: "MEMBERSHIP_CREATED",
+  MEMBERSHIP_FAILED: "VERIFICATION_APPROVED",
+  PROCESSING_ERROR: "VERIFICATION_IN_PROGRESS",
+};
+
+export function publicStatusOf(application) {
+  return PUBLIC_STATUS_MAP[application.status] || "VERIFICATION_IN_PROGRESS";
+}
+
+export function isTerminalStatus(status) {
+  return ["NOT_ELIGIBLE", "MEMBERSHIP_CREATED", "VERIFICATION_FAILED"].includes(status);
 }

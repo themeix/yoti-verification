@@ -55,7 +55,7 @@ export async function findMemberByEmail(email) {
 }
 
 function programmeLabelNames(cfg) {
-  return [cfg.programmeLabel, cfg.verifiedLabel];
+  return [cfg.programmeLabel, cfg.verifiedLabel, cfg.fundedLabel];
 }
 
 function mergeLabels(existingMembers, cfg) {

@@ -1,4 +1,4 @@
-import { runStart } from "./_lib/handlers.js";
+import { runCreateApplication } from "./_lib/handlers.js";
 import { corsHeaders, clientIp } from "./_lib/util.js";
 
 export default async function handler(req, res) {
@@ -25,8 +25,8 @@ export default async function handler(req, res) {
   }
   const proto = req.headers["x-forwarded-proto"] || "https";
   const host = req.headers.host || "";
-  const publicBaseUrl = process.env.PUBLIC_BASE_URL || `${proto}://${host}`;
-  const result = await runStart({
+  const publicBaseUrl = process.env.APP_BASE_URL || `${proto}://${host}`;
+  const result = await runCreateApplication({
     body,
     ip: clientIp(req.headers),
     origin: req.headers.origin,
