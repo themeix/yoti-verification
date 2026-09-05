@@ -1,5 +1,5 @@
-import { runGetApplication } from "../../_lib/handlers.js";
-import { corsHeaders } from "../../_lib/util.js";
+import { runGetApplication } from "../_lib/handlers.js";
+import { corsHeaders } from "../_lib/util.js";
 
 export default async function handler(req, res) {
   if (req.method === "OPTIONS") {

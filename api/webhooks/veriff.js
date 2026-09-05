@@ -1,4 +1,4 @@
-import { runVeriffWebhook } from "../../_lib/handlers.js";
+import { runVeriffWebhook } from "../_lib/handlers.js";
 
 export default async function handler(req, res) {
   if (req.method !== "POST") {
