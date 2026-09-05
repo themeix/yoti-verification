@@ -94,12 +94,17 @@ export async function ensureMember({ email, name }) {
 
 export async function compMember(member, expiryIso) {
   const cfg = config();
+  const expiryNote = `Funded membership comped until ${expiryIso.slice(0, 10)} (${cfg.programmeLabel})`;
+  const existingNote = (member.note || "").trim();
+  const note = existingNote.includes(expiryNote)
+    ? existingNote
+    : `${existingNote ? existingNote + "\n" : ""}${expiryNote}`;
   const edit = {
     comped: true,
     labels: mergeLabels(member.labels, cfg),
+    note,
     updated_at: member.updated_at,
   };
-  edit[cfg.ghost.compedExpiryField] = expiryIso;
   const body = await adminFetch(`/members/${member.id}/`, {
     method: "PUT",
     body: { members: [edit] },

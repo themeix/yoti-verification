@@ -15,7 +15,6 @@ export function config() {
       url: (env.GHOST_URL || env.GHOST_API_URL || "").replace(/\/+$/, ""),
       adminKey: env.GHOST_ADMIN_API_KEY || env.GHOST_ADMIN_KEY || "",
       newsletterId: env.GHOST_NEWSLETTER_ID || "",
-      compedExpiryField: env.GHOST_COMPED_EXPIRY_FIELD || "comped_expiry",
       sendMagicLink: (env.SEND_MAGIC_LINK || "true") !== "false",
     },
     email: {

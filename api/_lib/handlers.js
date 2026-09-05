@@ -333,7 +333,6 @@ export async function runHealth() {
     ghost: {
       urlConfigured: Boolean(cfg.ghost.url),
       newsletterConfigured: Boolean(cfg.ghost.newsletterId),
-      compedExpiryField: cfg.ghost.compedExpiryField,
     },
     ageRange: [cfg.ageMin, cfg.ageMax],
     membershipMonths: cfg.membershipMonths,
