@@ -14,7 +14,13 @@ export default async function handler(req, res) {
   }
   const segments = new URL(req.url, `http://${req.headers.host || "localhost"}`).pathname.split("/").filter(Boolean);
   const applicationId = segments[segments.length - 1];
-  const result = await runGetApplication({ applicationId, origin: req.headers.origin });
-  res.writeHead(result.status, result.headers);
-  res.end(JSON.stringify(result.body));
+  try {
+    const result = await runGetApplication({ applicationId, origin: req.headers.origin });
+    res.writeHead(result.status, result.headers);
+    res.end(JSON.stringify(result.body));
+  } catch (err) {
+    console.error("runGetApplication failed", err.message, err.stack);
+    res.writeHead(500, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: "internal", message: err.message }));
+  }
 }
